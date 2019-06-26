@@ -23,9 +23,19 @@ using pip:
 
 Example usage:
     python transcribe_streaming_mic.py
+
 """
+
+
 # [START import_libraries]
 from __future__ import division
+
+#내가 추가한 부분
+import wave
+import pygame
+import time
+import threading
+
 
 import re
 import sys
@@ -106,6 +116,47 @@ class MicrophoneStream(object):
             yield b''.join(data)
 # [END audio_stream]
 
+##global check
+##def execute(): # 쓰레드 객체 선언
+##    if check == 1 :
+##        # 녹음부분
+##        FORMAT = pyaudio.paInt16
+##        CHANNELS=1
+##        RATE = 16000
+##        CHUNK= int(RATE/10)
+##        RECORD_SECONDS= 10
+##        WAVE_OUTPUT_FILENAME="file.wav"
+##
+##        audio = pyaudio.PyAudio()
+##        stream = audio.open(format=pyaudio.paInt16,
+##                        channels=CHANNELS,
+##                        rate = RATE,
+##                        input = True,
+##                        input_device_index=1,
+##                        frames_per_buffer=CHUNK)
+##    
+##        print("녹음중")
+##        frames=[]
+##        while True:
+##            data = stream.read(CHUNK)
+##            frames.append(data)
+##            if check == 2:
+##                break
+##        
+##    elif check == 2:
+##        # 녹음끝
+##            stream.stop_stream()
+##            stream.close()
+##            audio.terminate()
+##
+##            waveFile = wave.open(WAVE_OUTPUT_FILENAME,'wb')
+##            waveFile.setnchannels(CHANNELS)
+##            waveFile.setsampwidth(audio.get_sample_size(FORMAT))
+##            waveFile.setframerate(RATE)
+##            waveFile.writeframes(b''.join(frames))
+##
+##            waveFile.close()
+
 def listen_print_loop(responses,s):
     """Iterates through server responses and prints them.
 
@@ -122,19 +173,32 @@ def listen_print_loop(responses,s):
     final one, print a newline to preserve the finalized transcription.
     """
     num_chars_printed = 0
+
     
+   
+    check = 1
     for response in responses:
         
+
+        
+        #녹음 시작
+       
         if not response.results:
             continue
 
         # The `results` list is consecutive. For streaming, we only care about
         # the first result being considered, since once it's `is_final`, it
         # moves on to considering the next utterance.
+
+        
         result = response.results[0]
         if not result.alternatives:
             continue
+        
+        
+        
 
+        
         # Display the transcription of the top alternative.
         transcript = result.alternatives[0].transcript
 
@@ -144,7 +208,7 @@ def listen_print_loop(responses,s):
         # If the previous result was longer than this one, we need to print
         # some extra spaces to overwrite the previous result
         overwrite_chars = ' ' * (num_chars_printed - len(transcript))
-
+        
         if not result.is_final:
             #sys.stdout.write(transcript + overwrite_chars + '\r')
             #sys.stdout.flush()
@@ -153,12 +217,24 @@ def listen_print_loop(responses,s):
             
 
         else:
-            print(transcript + overwrite_chars)
-            if(s == str(transcript + overwrite_chars).strip().lower()):
-                print("Perfect!!")
+            check = 2
+            #녹음 끝 저장 파일 실행
+##            pygame.mixer.init()
+##            bang = pygame.mixer.Sound(WAVE_OUTPUT_FILENAME)
+##            while True:
+##                bang.play()
+##                time.sleep(2.0)
+##            
+##            os.remove(WAVE_OUTPUT_FILENAME)
+            
+            
+            print(str(transcript + overwrite_chars).strip().lower())
+            if(s.strip() == str(transcript + overwrite_chars).strip().lower()):
+                print("Perfect!!", end ="\n\n\n")
+                break
                 
             else:
-                print("NOOOOOOO!!")
+                print("NOOOOOOO!!", end="\n\n")
             # Exit recognition if any of the transcribed phrases could be
             # one of our keywords.
             if re.search(r'\b(exit|quit)\b', transcript, re.I):
@@ -166,34 +242,53 @@ def listen_print_loop(responses,s):
                 break
 
             num_chars_printed = 0
+            
+def prints():
+    print("en-AU(오스트레일리아)")
+    print("en-CA(케나다)")
+    print("en-GB(영국)")
+    print("en-US(미국)")
+    print("es-ES(스페인어)")
+    print("fr-FR(프랑스어)")
+    print("ja-JP(일본어)")
+    print("ko-KR(한국어)")
+    print("exit(프로그램종료)")
+    
+    return input()
 
+language = ['en-AU','en-CA','en-GB', 'en-US', 'es-ES', 'fr-FR', 'ja-JP','ko-KR']
 def main():
+    check = 0
     # See http://g.cㅇo/cloud/speech/docs/languages
     # for a list of supported languages.
-    language_code = 'ko-KR'  # a BCP-47 language tag
-
-    s = input("원하는 문장을 입력하세요 : ")
-
-    client = speech.SpeechClient()
-    config = types.RecognitionConfig(
-        encoding=enums.RecognitionConfig.AudioEncoding.LINEAR16,
-        sample_rate_hertz=RATE,
-        language_code=language_code)
-    streaming_config = types.StreamingRecognitionConfig(
-        config=config,
-        interim_results=True)
-
-    with MicrophoneStream(RATE, CHUNK) as stream:
+    while(True):
+        language_code = prints()  # a BCP-47 language tag
+        if language_code == "exit":
+            break;
+        if language_code not in language:
+            print("잘못 입력했습니다.\n 다시입력해주세요.")
+            continue
+        s = input("원하는 문장을 입력하세요 : ")
         
-        audio_generator = stream.generator()
-        requests = (types.StreamingRecognizeRequest(audio_content=content)
-                    for content in audio_generator)
+        client = speech.SpeechClient()
+        config = types.RecognitionConfig(
+            encoding=enums.RecognitionConfig.AudioEncoding.LINEAR16,
+            sample_rate_hertz=RATE,
+            language_code=language_code)
+        streaming_config = types.StreamingRecognitionConfig(
+            config=config,
+            interim_results=True)
 
-        responses = client.streaming_recognize(streaming_config, requests)
-        
-        # Now, put the transcription responses to use.
-        listen_print_loop(responses,s)
+        with MicrophoneStream(RATE, CHUNK) as stream:
+            
+            audio_generator = stream.generator()
+            requests = (types.StreamingRecognizeRequest(audio_content=content)
+                        for content in audio_generator)
+
+            responses = client.streaming_recognize(streaming_config, requests)
+            # Now, put the transcription responses to use.
+            listen_print_loop(responses,s)
 
 if __name__ == '__main__':
-    os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'pivotal-purpose-232707-9891015147ad.json'
+    os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'pivotal-purpose-232707-5fd75ba680f5.json'
     main()
